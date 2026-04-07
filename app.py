@@ -85,7 +85,7 @@ class PayrollAuditor:
 # 2. LUXURY HEBREW PDF GENERATOR (Auto-Font)
 # ==========================================
 class PDF_Elite:
-   @staticmethod
+    @staticmethod
     def get_hebrew_font():
         from reportlab.pdfbase import pdfmetrics
         from reportlab.pdfbase.ttfonts import TTFont
@@ -110,6 +110,37 @@ class PDF_Elite:
             return 'Hebrew'
         except:
             return 'Helvetica'
+
+    @classmethod
+    def ensure_fonts(cls):
+        """Ensure we have proper fonts for Hebrew text rendering"""
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.ttfonts import TTFont
+        import os, urllib.request
+        
+        font_path = "/tmp/Assistant-Bold.ttf"
+        
+        # Download font if it doesn't exist
+        if not os.path.exists(font_path):
+            url = "https://raw.githubusercontent.com/googlefonts/assistant/main/fonts/ttf/Assistant-Bold.ttf"
+            try:
+                req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+                with urllib.request.urlopen(req) as response, open(font_path, 'wb') as out_file:
+                    out_file.write(response.read())
+            except Exception as e:
+                print(f"Failed to download font: {e}")
+        
+        # Register fonts
+        try:
+            pdfmetrics.registerFont(TTFont('HebrewBold', font_path))
+            font_reg = 'Helvetica'
+            font_bold = 'HebrewBold'
+        except Exception as e:
+            print(f"Failed to register font: {e}")
+            font_reg = 'Helvetica'
+            font_bold = 'Helvetica-Bold'
+        
+        return font_reg, font_bold
 
     @classmethod
     def generate(cls, data_dict, is_sample=False):
@@ -245,7 +276,7 @@ class PDF_Elite:
         
         p.setFillColor(colors.HexColor("#999999"))
         p.setFont(font_reg, 9)
-        p.drawCentredString(w/2, 30, get_display("WealthOS 2026 - הדוח הינו סימולציה כלכלית ואינו מהווה תחליף לייעוץ פנסיוני ומיסוי מקצועי."))
+        p.drawCentredString(w/2, 30, get_display("WealthOS 2026 - הדוח הינו סימולציה כלכלית ואינו מהווה תחליף לייעוץ פנסיוני ומיסוי מקצועי"))
 
         p.showPage()
         p.save()
