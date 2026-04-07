@@ -1,4 +1,5 @@
 import io, os, time, threading, random, secrets
+import urllib.request
 from flask import Flask, render_template, request, send_file
 from bidi.algorithm import get_display
 
@@ -34,7 +35,6 @@ class PayrollAuditor:
 
         hish_imputed = max(0, (bruto - 15712)) * (hish_boss_pct / 100) if hish_boss_pct > 0 else 0
         
-        # הבסיס למס כולל את כל התוספות והזקיפות!
         taxable_gross = bruto + cash_additions + imputed_income + hish_imputed
         btl_gross = bruto + cash_additions + imputed_income
 
@@ -53,7 +53,6 @@ class PayrollAuditor:
             
         tax -= (points * 242)
         
-        # זיכוי מס בגין הפקדה לפנסיה
         pen_emp_val = bruto * (pen_emp_pct / 100)
         tax -= (min(pen_emp_val, 679) * 0.35)
         tax = max(0, tax)
@@ -69,9 +68,7 @@ class PayrollAuditor:
         pitzuim_val = bruto * (pitzuim_pct / 100)
         hish_boss_val = bruto * (hish_boss_pct / 100)
         
-        # חישוב הנטו האמיתי לבנק
         neto = bruto + cash_additions - tax - social - pen_emp_val - hish_emp_val
-        
         btl_boss = (min(btl_gross, 7522) * 0.0355) + (max(0, btl_gross - 7522) * 0.076)
         cost = bruto + cash_additions + imputed_income + pen_boss_val + pitzuim_val + hish_boss_val + btl_boss
         
@@ -85,21 +82,39 @@ class PayrollAuditor:
         }
 
 # ==========================================
-# 2. LUXURY HEBREW PDF GENERATOR
+# 2. LUXURY HEBREW PDF GENERATOR (Auto-Font)
 # ==========================================
 class PDF_Elite:
     @staticmethod
-    def get_hebrew_font():
+    def ensure_fonts():
         from reportlab.pdfbase import pdfmetrics
         from reportlab.pdfbase.ttfonts import TTFont
-        paths = ["/System/Library/Fonts/Supplemental/Arial.ttf", "/Library/Fonts/Arial.ttf"]
-        for p in paths:
-            if os.path.exists(p):
+        
+        font_reg = "Assistant-Regular.ttf"
+        font_bold = "Assistant-Bold.ttf"
+        
+        # הורדה ישירה של פונטים חדים של גוגל לתוך השרת
+        urls = {
+            font_reg: "https://raw.githubusercontent.com/googlefonts/assistant/main/fonts/ttf/Assistant-Regular.ttf",
+            font_bold: "https://raw.githubusercontent.com/googlefonts/assistant/main/fonts/ttf/Assistant-Bold.ttf"
+        }
+        
+        for file_name, url in urls.items():
+            if not os.path.exists(file_name):
                 try:
-                    pdfmetrics.registerFont(TTFont('Hebrew', p))
-                    return 'Hebrew'
-                except: pass
-        return 'Helvetica'
+                    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+                    with urllib.request.urlopen(req) as response, open(file_name, 'wb') as out_file:
+                        out_file.write(response.read())
+                except Exception as e:
+                    print(f"Error downloading font {file_name}: {e}")
+
+        try:
+            pdfmetrics.registerFont(TTFont('Hebrew', font_reg))
+            pdfmetrics.registerFont(TTFont('Hebrew-Bold', font_bold))
+            return 'Hebrew', 'Hebrew-Bold'
+        except:
+            # מקרה חירום קיצוני
+            return 'Helvetica', 'Helvetica-Bold'
 
     @classmethod
     def generate(cls, data_dict, is_sample=False):
@@ -107,7 +122,9 @@ class PDF_Elite:
         from reportlab.lib.pagesizes import A4
         from reportlab.lib import colors
         
-        font = cls.get_hebrew_font()
+        # משיכת הפונטים החדים שלנו
+        font_reg, font_bold = cls.ensure_fonts()
+        
         buffer = io.BytesIO()
         p = canvas.Canvas(buffer, pagesize=A4)
         w, h = A4
@@ -120,20 +137,20 @@ class PDF_Elite:
         p.setFillColor(C_BG)
         p.rect(0, h-120, w, 120, fill=1)
         p.setFillColor(C_GOLD)
-        p.setFont(font, 36)
+        p.setFont(font_bold, 36)
         p.drawRightString(w - 40, h - 65, get_display("WealthOS"))
         
         p.setFillColor(colors.white)
-        p.setFont(font, 14)
+        p.setFont(font_reg, 14)
         doc_title = "אנליזת תלוש שכר - דוח דגימה" if is_sample else "דוח ביקורת שכר מלא (VIP)"
         p.drawRightString(w - 40, h - 90, get_display(doc_title))
-        p.setFont(font, 10)
+        p.setFont(font_reg, 10)
         p.setFillColor(colors.HexColor("#888888"))
         p.drawString(40, h - 90, f"Ref: WOS-{random.getrandbits(16)}")
 
         y = h - 160
         p.setFillColor(C_TEXT)
-        p.setFont(font, 20)
+        p.setFont(font_bold, 20)  # שימוש בפונט מודגש לכותרת - הופך את זה לחד מאוד
         p.drawRightString(w - 40, y, get_display("פירוט נתונים פיננסיים (ברמת השקל):"))
         p.setStrokeColor(C_GOLD)
         p.setLineWidth(2)
@@ -143,7 +160,7 @@ class PDF_Elite:
         def draw_row(label, val, is_bold=False, color=C_TEXT, size=13):
             nonlocal y
             p.setFillColor(color)
-            p.setFont(font, size)
+            p.setFont(font_bold if is_bold else font_reg, size) # שימוש חכם בפונטים
             p.drawRightString(w - 50, y, get_display(label))
             p.drawString(90, y, val)
             y -= 25
@@ -178,7 +195,7 @@ class PDF_Elite:
         # חלק ב': ניכויים
         y -= 10
         p.setFillColor(colors.HexColor("#666666"))
-        p.setFont(font, 11)
+        p.setFont(font_bold, 11)
         p.drawRightString(w - 50, y, get_display("ניכויי חובה והפרשות עובד:"))
         y -= 20
         
@@ -201,7 +218,7 @@ class PDF_Elite:
 
         # חלק ד': הפרשות מעסיק
         p.setFillColor(colors.HexColor("#666666"))
-        p.setFont(font, 11)
+        p.setFont(font_bold, 11)
         p.drawRightString(w - 50, y, get_display("הפרשות מעסיק לקופות מחוץ לשכר (כסף שלך):"))
         y -= 20
         
@@ -225,14 +242,14 @@ class PDF_Elite:
         p.setFillColor(C_BG)
         p.roundRect(40, y - 60, w - 80, 80, 12, fill=1, stroke=0)
         p.setFillColor(colors.white)
-        p.setFont(font, 14)
+        p.setFont(font_bold, 14)
         p.drawRightString(w - 60, y - 20, get_display("תחזית צבירת הון דריבית (10 שנים, 5% תשואה):"))
         p.setFillColor(C_GOLD)
-        p.setFont(font, 22)
+        p.setFont(font_bold, 22)
         p.drawString(80, y - 25, data_dict['proj'])
         
         p.setFillColor(colors.HexColor("#999999"))
-        p.setFont(font, 9)
+        p.setFont(font_reg, 9)
         p.drawCentredString(w/2, 30, get_display("WealthOS 2026 - הדוח הינו סימולציה כלכלית ואינו מהווה תחליף לייעוץ פנסיוני ומיסוי מקצועי."))
 
         p.showPage()
