@@ -85,36 +85,31 @@ class PayrollAuditor:
 # 2. LUXURY HEBREW PDF GENERATOR (Auto-Font)
 # ==========================================
 class PDF_Elite:
-    @staticmethod
-    def ensure_fonts():
+   @staticmethod
+    def get_hebrew_font():
         from reportlab.pdfbase import pdfmetrics
         from reportlab.pdfbase.ttfonts import TTFont
-        
-        font_reg = "Assistant-Regular.ttf"
-        font_bold = "Assistant-Bold.ttf"
-        
-        # הורדה ישירה של פונטים חדים של גוגל לתוך השרת
-        urls = {
-            font_reg: "https://raw.githubusercontent.com/googlefonts/assistant/main/fonts/ttf/Assistant-Regular.ttf",
-            font_bold: "https://raw.githubusercontent.com/googlefonts/assistant/main/fonts/ttf/Assistant-Bold.ttf"
-        }
-        
-        for file_name, url in urls.items():
-            if not os.path.exists(file_name):
-                try:
-                    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-                    with urllib.request.urlopen(req) as response, open(file_name, 'wb') as out_file:
-                        out_file.write(response.read())
-                except Exception as e:
-                    print(f"Error downloading font {file_name}: {e}")
+        import os, urllib.request
 
+        # השרת של Render יחפש את הפונט בתיקייה הזמנית שלו
+        font_path = "/tmp/Assistant-Bold.ttf"
+        
+        # אם הפונט לא קיים בשרת, הוא מוריד אותו פעם אחת מגוגל
+        if not os.path.exists(font_path):
+            url = "https://raw.githubusercontent.com/googlefonts/assistant/main/fonts/ttf/Assistant-Bold.ttf"
+            try:
+                req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+                with urllib.request.urlopen(req) as response, open(font_path, 'wb') as out_file:
+                    out_file.write(response.read())
+            except:
+                pass
+
+        # רושם את הפונט כדי שה-PDF יוכל להשתמש בו לעברית
         try:
-            pdfmetrics.registerFont(TTFont('Hebrew', font_reg))
-            pdfmetrics.registerFont(TTFont('Hebrew-Bold', font_bold))
-            return 'Hebrew', 'Hebrew-Bold'
+            pdfmetrics.registerFont(TTFont('Hebrew', font_path))
+            return 'Hebrew'
         except:
-            # מקרה חירום קיצוני
-            return 'Helvetica', 'Helvetica-Bold'
+            return 'Helvetica'
 
     @classmethod
     def generate(cls, data_dict, is_sample=False):
