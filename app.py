@@ -7,42 +7,44 @@ from bidi.algorithm import get_display
 
 app = Flask(__name__)
 
-# הגדרת פונט עברית מהתיקייה שיצרת
+# נתיב לפונט
 font_path = os.path.join(os.path.dirname(__file__), 'fonts', 'NotoSansHebrew-Bold.ttf')
-pdfmetrics.registerFont(TTFont('HebrewBold', font_path))
+if os.path.exists(font_path):
+    pdfmetrics.registerFont(TTFont('HebrewBold', font_path))
 
-HTML_TEMPLATE = """
+# לוגו M עם חץ צמיחה (SVG)
+LOGO_SVG = """<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='#1a1a1a'/><path d='M20 70 L40 40 L60 50 L85 20' stroke='#FFD700' stroke-width='4' fill='none'/><text y='.75em' x='5' font-size='70' fill='#FFD700' font-family='Arial' font-weight='bold' opacity='0.8'>M</text><path d='M75 20 L85 20 L85 30' stroke='#FFD700' stroke-width='4' fill='none'/></svg>"""
+
+HTML_TEMPLATE = f"""
 <!DOCTYPE html>
 <html lang="he" dir="rtl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WealthOS | ניהול הון</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%231a1a1a%22/><text y=%22.75em%22 x=%225%22 font-size=%2280%22 fill=%22%23FFD700%22 font-family=%22Arial%22 font-weight=%22bold%22>M</text></svg>">
+    <link rel="icon" href="data:image/svg+xml,{LOGO_SVG.replace('"', '%22')}">
+    
+    <meta name="description" content="WealthOS - המערכת המובילה לניהול הון והפקת דוחות">
+    
     <style>
-        body { font-family: sans-serif; text-align: center; background: #f4f4f4; padding: 50px; }
-        .card { background: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); max-width: 400px; margin: auto; }
-        button { background: #FFD700; border: none; padding: 10px 20px; font-weight: bold; border-radius: 5px; cursor: pointer; margin: 10px; }
-        .vip-btn { background: #1a1a1a; color: gold; }
+        body {{ font-family: 'Segoe UI', Tahoma, sans-serif; text-align: center; background: #0f0f0f; color: white; padding: 50px; }}
+        .card {{ background: #1a1a1a; padding: 40px; border-radius: 20px; border: 1px solid #333; max-width: 500px; margin: auto; }}
+        .logo-container {{ width: 80px; margin: 0 auto 20px; }}
+        h1 {{ color: #FFD700; margin: 0; }}
+        button {{ background: #FFD700; border: none; padding: 15px 30px; font-weight: bold; border-radius: 10px; cursor: pointer; width: 100%; margin-top: 20px; }}
+        .vip-btn {{ background: transparent; border: 2px solid #FFD700; color: #FFD700; }}
     </style>
 </head>
 <body>
     <div class="card">
+        <div class="logo-container">{LOGO_SVG}</div>
         <h1>WealthOS 🚀</h1>
-        <p>מערכת ניהול הון אישית</p>
+        <p>ניהול הון וצמיחה פיננסית</p>
         <form action="/download" method="get">
-            <button type="submit">הורד דו"ח PDF בעברית</button>
+            <button type="submit">הורד דו"ח PDF</button>
         </form>
-        <button class="vip-btn" onclick="trackVIP()">הצטרף ל-VIP 👑</button>
+        <a href="/vip"><button class="vip-btn">מתחם VIP 👑</button></a>
     </div>
-
-    <script>
-    function trackVIP() {
-        // מעקב לחיצות (לוג פשוט למטרת מעקב)
-        console.log("VIP Clicked");
-        alert("ברוך הבא ל-VIP! הלחיצה שלך נרשמה במערכת הסטטיסטיקה שלנו.");
-    }
-    </script>
 </body>
 </html>
 """
@@ -51,22 +53,23 @@ HTML_TEMPLATE = """
 def index():
     return render_template_string(HTML_TEMPLATE)
 
+@app.route('/vip')
+def vip():
+    return "<h1>מתחם VIP - בקרוב!</h1><a href='/'>חזרה</a>"
+
 @app.route('/download')
 def download_pdf():
     response = make_response()
     response.headers['Content-Type'] = 'application/pdf'
-    response.headers['Content-Disposition'] = 'attachment; filename=report.pdf'
-    
+    response.headers['Content-Disposition'] = 'attachment; filename=wealth_report.pdf'
     p = canvas.Canvas(response.stream)
-    p.setFont('HebrewBold', 16)
-    
-    text = "WealthOS - דו\"ח ניהול הון"
-    reshaped_text = get_display(text) # תיקון עברית שתהיה מימין לשמאל
-    
-    p.drawRightString(500, 800, reshaped_text)
+    if os.path.exists(font_path):
+        p.setFont('HebrewBold', 18)
+    text = get_display("WealthOS - דו\"ח צמיחה")
+    p.drawRightString(550, 800, text)
     p.showPage()
     p.save()
     return response
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
